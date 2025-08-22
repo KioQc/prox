@@ -3,7 +3,7 @@
 
 # VARIABLES À MODIFIER
 DOMAIN="wplace.furryqc.net"   # ton domaine
-EMAIL="tonemail@example.com"  # pour Let's Encrypt
+EMAIL="kioqcpay@gmail.com"  # pour Let's Encrypt
 
 # Update & dépendances
 apt update && apt upgrade -y
