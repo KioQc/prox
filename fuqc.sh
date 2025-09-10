@@ -2,8 +2,8 @@
 # Helper script Proxmox VE – Wplace API Overlay
 
 # VARIABLES À MODIFIER
-DOMAIN="wplace.furryqc.net"   # ton domaine
-EMAIL="kioqcpay@gmail.com"  # pour Let's Encrypt
+DOMAIN="wplanet"   # ton domaine
+EMAIL="JETEBAISSEMDRRR@gmail.com"  # pour Let's Encrypt
 
 # Update & dépendances
 apt update && apt upgrade -y
