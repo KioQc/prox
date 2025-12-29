@@ -1,97 +1,44 @@
 #!/bin/bash
-# Helper script Proxmox VE – Wplace API Overlay
+set -e
 
-# VARIABLES À MODIFIER
-DOMAIN="wplanet"   # ton domaine
-EMAIL="JETEBAISSEMDRRR@gmail.com"  # pour Let's Encrypt
+### CONFIG ###
+CTID=120
+HOSTNAME=yiff-gallery
+STORAGE=GB
+BRIDGE=vmbr0
+DISK_SIZE=20
+MEMORY=2048
+CORES=2
+PASSWORD_TEMP="changeme"
 
-# Update & dépendances
-apt update && apt upgrade -y
-apt install -y curl git build-essential ufw nginx certbot python3-certbot-nginx
+TEMPLATE="local:vztmpl/debian-12-standard_12.2-1_amd64.tar.zst"
 
-# Installer Node.js 20
-curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-apt install -y nodejs
-npm install -g pm2
+echo "=== Création du LXC $CTID ==="
 
-# Créer dossier serveur
-mkdir -p /opt/wplace-api
-cd /opt/wplace-api
-npm init -y
-npm install express cors body-parser shortid
+pct create $CTID $TEMPLATE \
+  --hostname $HOSTNAME \
+  --storage $STORAGE \
+  --rootfs ${STORAGE}:${DISK_SIZE} \
+  --memory $MEMORY \
+  --cores $CORES \
+  --net0 name=eth0,bridge=$BRIDGE,ip=dhcp \
+  --password $PASSWORD_TEMP \
+  --unprivileged 1 \
+  --features nesting=1,keyctl=1
 
-# Créer server.js
-cat > /opt/wplace-api/server.js << 'EOF'
-const express = require("express");
-const cors = require("cors");
-const bodyParser = require("body-parser");
-const fs = require("fs");
-const path = require("path");
-const shortid = require("shortid");
+echo "=== Démarrage du LXC ==="
+pct start $CTID
 
-const app = express();
-const PORT = 3000;
-const DATA_FILE = path.join(__dirname, "overlays.json");
+echo "=== Attente 10 secondes ==="
+sleep 10
 
-app.use(cors());
-app.use(bodyParser.json());
+echo "=== Installation curl dans le LXC ==="
+pct exec $CTID -- bash -c "apt update && apt install -y curl"
 
-let overlays = {};
-if(fs.existsSync(DATA_FILE)){
-  overlays = JSON.parse(fs.readFileSync(DATA_FILE));
-}
+echo "=== Téléchargement script d'installation ==="
+pct exec $CTID -- bash -c "curl -o /root/install-yiff.sh https://raw.githubusercontent.com/KioQc/prox/main/fuqc.sh || true"
 
-app.post("/api/save", (req,res)=>{
-  const {image,x,y,zoom,opacity}=req.body;
-  if(!image) return res.status(400).json({error:"Image obligatoire"});
-  const id = shortid.generate();
-  overlays[id] = {image,x,y,zoom,opacity};
-  fs.writeFileSync(DATA_FILE,JSON.stringify(overlays,null,2));
-  res.json({id});
-});
-
-app.get("/api/get/:id",(req,res)=>{
-  const data = overlays[req.params.id];
-  if(!data) return res.status(404).json({error:"ID non trouvé"});
-  res.json(data);
-});
-
-app.listen(PORT,()=>console.log(`Server running on port ${PORT}`));
-EOF
-
-# Lancer le serveur via PM2
-pm2 start /opt/wplace-api/server.js --name wplace-api
-pm2 save
-pm2 startup systemd
-
-# Configurer firewall
-ufw allow OpenSSH
-ufw allow 'Nginx Full'
-ufw enable
-
-# Configurer Nginx
-cat > /etc/nginx/sites-available/wplace-api << EOF
-server {
-    listen 80;
-    server_name $DOMAIN;
-
-    location / {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host \$host;
-        proxy_cache_bypass \$http_upgrade;
-    }
-}
-EOF
-
-ln -s /etc/nginx/sites-available/wplace-api /etc/nginx/sites-enabled/
-nginx -t && systemctl restart nginx
-
-# Installer SSL avec Let's Encrypt
-certbot --nginx -d $DOMAIN --non-interactive --agree-tos -m $EMAIL
-
-echo "✅ Installation terminée !"
-echo "Serveur Node.js : http://127.0.0.1:3000"
-echo "Domaine accessible via HTTPS : https://$DOMAIN"
+echo
+echo "LXC créé ✅"
+echo "Entre dans le LXC avec : pct enter $CTID"
+echo "Puis lance : bash /root/install-yiff.sh"
